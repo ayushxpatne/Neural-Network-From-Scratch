@@ -1,28 +1,60 @@
 import numpy as np
 from activation_functions import ActivationFunction
+from loss_functions import BinaryCrossEntropy
 
 xor_input = [[0, 0], [0, 1], [1, 0], [1, 1]]
 xor_output = [0, 1, 1, 0]
 
 
 class NeuralNetwork:
-    def __init__(self, epochs=10, learning_rate=0.1) -> None:
-        self.epoch = epochs
-        self.learning_rate = learning_rate
-        self.layer1_weights = np.random.rand(2, 2)  # (2,2)
-        self.output_weights = np.random.rand(2, 1)  # (2,1)
-        self.layer1_bias = np.random.rand(1, 2)  # (1,2)
-        self.output_bias = np.random.rand(1, 1)  # (1,1)
+    def __init__(
+        self,
+        x_arr: list,
+        y_arr,
+        epochs=10,
+        learning_rate=0.1,
+        neurons_per_layer=2,
+        hidden_layers=2,
+    ) -> None:
 
-    def train(self, x_arr, y_arr):
-        if x_arr.__len__() != y_arr.__len__():
+        self.x_arr = x_arr
+        self.y_arr = y_arr
+
+        self.x_dim = x_arr[0].__len__()
+        self.y_dim = 1 if type(y_arr[0]) == int else y_arr[0].__len__()
+
+        self.epochs = epochs
+        self.learning_rate = learning_rate
+
+        self.neurons_per_layer = neurons_per_layer
+        self.hidden_layers = hidden_layers
+
+        self.input_weights = np.random.rand(self.x_dim, self.neurons_per_layer)
+
+        self.hidden_layer_weights = [
+            np.random.rand(self.neurons_per_layer, self.neurons_per_layer)
+            for i in range(self.hidden_layers - 1)
+        ]
+
+        self.hidden_layer_biases = [
+            np.random.rand(1, self.neurons_per_layer) for i in range(self.hidden_layers)
+        ]
+
+        self.output_weights = np.random.rand(self.neurons_per_layer, self.y_dim)
+
+        self.output_bias = np.random.rand(1, self.y_dim)
+
+    def train(self):
+        if self.x_dim < 1 or self.y_dim < 1:
+            return -2
+        if self.x_arr.__len__() != self.y_arr.__len__():
             return -1
 
-        for e in range(self.epoch):
+        for e in range(self.epochs):
             # print(f"\n--- EPOCH {e} ---")
-            for i in range(len(x_arr)):
-                x = x_arr[i]
-                y = y_arr[i]
+            for i in range(len(self.x_arr)):
+                x = self.x_arr[i]
+                y = self.y_arr[i]
 
                 y_pred = self.forward_pass(x)
                 self.back_propogation(x, y_pred, y)
@@ -31,117 +63,139 @@ class NeuralNetwork:
         return self.forward_pass(x)
 
     def forward_pass(self, x):
-        # * LAYER 1
-        self.layer_1 = (
-            x @ self.layer1_weights + self.layer1_bias
-        )  # (1,2) @ (2,2) + (1,2) => (1,2) +(1,2) => (1,2)
 
-        # *  LAYER 1 THROUGH ACTIVATION FUNCTION
-        self.layer_1_af = ActivationFunction.relu(self.layer_1)  # (1,2)
+        # INPUT TO FIRST HIDDEN LAYER:
+        x_l = x @ self.input_weights
+        self.activation_values = []
+        self.z_values = []
 
-        # * OUTPUT LAYER
-        self.output_layer = (
-            self.layer_1_af @ self.output_weights + self.output_bias
-        )  # (1,2) @ (2,1) + (1,1) => (1,1) + (1,1)
+        # HIDDEN LAYER TO LAST LAYER
+        for current_layer in range(self.hidden_layers):
+            # print(self.activation_values)
+            # LAST LAYER TO OUTPUT
+            if current_layer == self.hidden_layers - 1:
+                l = (
+                    self.activation_values[current_layer - 1] @ self.output_weights
+                    + self.output_bias
+                )
+                a = ActivationFunction.sigmoid(l)
+                self.activation_values.append(a)
+                return a
 
-        # * OUTPUT LAYER THROUGH ACTIVATION FUNCTION
-        self.output_layer_af = ActivationFunction.sigmoid(self.output_layer)  # (1,1)
+            if current_layer == 0:
+                l = x_l + self.hidden_layer_biases[current_layer]
+                
+            else:
+                l = (
+                    self.activation_values[current_layer - 1]
+                    @ self.hidden_layer_weights[current_layer]
+                    + self.hidden_layer_biases[current_layer]
+                )
 
-        return self.output_layer_af  # (1,1)
+            self.z_values.append(l)
+            a = ActivationFunction.relu(l)
+            self.activation_values.append(a)
 
-    def back_propogation(self, x, y_pred, y_true):
-        # LOSS FUNCTION : BINARY CROSS ENTROPY : -(y_true * log(y_pred) + (1 - y_true) * log(1 - y_pred))
-
-        # * COMMON DERIVATIVE STEPS OF THE CHAIN RULE FOR ALL GRADIENTS
-        # DERIVATIVE OF LOSS wrt Y PRED
-        dLoss_dY_pred = (y_pred - y_true) / (y_pred * (1 - y_pred))
-        # DERIVATIVE OF Y PRED wrt OUTPUT LAYER THROUGH ACTIVATION FUNCTION
-        dY_pred_dOutput_layer_af = y_pred * (1 - y_pred)
-
-        # * OUTPUT LAYER : INTERMEDIATE STEPS FOR CHAIN RULE
-        # DERIVATIVE OF OUTPUT LAYER THROUGH ACTIVATION FUNCTION wrt OUTPUT LAYER WEIGHTS
-        dOutput_layer_af_dOutput_layer_weights = self.layer_1_af  # (1,2)
-        # DERIVATIVE OF OUTPUT LAYER THROUGH ACTIVATION FUNCTION wrt OUTPUT LAYER BIAS
-        dOutput_layer_af_dOutput_layer_bias = 1
-
-        # * HIDDEN LAYER : INTERMEDIATE STEPS FOR CHAIN RULE
-        # DERIVATIVE OF OUTPUT LAYER THROUGH ACTIVATION FUNCTION wrt OUTPUT LAYER
-        dOutput_layer_af_dOutput_layer = ActivationFunction.sigmoid_derivative(
-            sigmoid_term=self.output_layer_af
+    def back_propogation(self, x, y_pred, y):
+        delta = BinaryCrossEntropy(
+            y_pred=y_pred, y_true=y
+        ).derivative_bce_wrt_y_pred() * ActivationFunction.sigmoid_derivative(
+            y_pred
         )  # (1,1)
-        # DERIVATIVE OF OUTPUT LAYER wrt HIDDEN LAYER THROUGH ACTIVATION FUNCTION
-        dOutput_layer_dLayer_1_af = self.output_weights  # (2,1)
-        # DERIVATIVE OF LAYER 1 THROUGH ACTIVATION FUNCTION wrt LAYER 1
-        dLayer_1_af_dLayer_1 = ActivationFunction.relu_derivative(self.layer_1)  # (1,2)
-        # DERIVATIVE OF LAYER 1 wrt LAYER 1 WEIGHTS
-        dLayer_1_wrt_dLayer_1_weights = np.array(x).reshape(
-            -1, 1
-        )  # (1,2) #Considering the input X in this case is a 1D array, .T does no change- ie it doesnt transpose it to a column,
-        # so we have to use the reshape it.
 
-        # DERIVATIVE OF LAYER 1 wrt LAYER 1 BIASES
-        dLayer_1_wrt_dLayer_1_biases = 1
+        deltas = {}
 
-        delta = dLoss_dY_pred * dY_pred_dOutput_layer_af  # (1,1)
+        for k in range(
+            self.hidden_layers - 1, 0, -1
+        ):  # Hidden Layer 0 ie delta 0 involves input weights which is currently leading to incompatible element-wise multiplcation, hence has to be done seperately.
+            eqn = f"dz_{k+1}/da_{k}*da_{k}/dz_{k}"
+            key = f"delta_{k}"
+            # print(f"{key} : {eqn}")
+            temp = self.derivative_Z_wrt_A_prev(k) * self.derivative_A_wrt_Z(k - 1)
+            # print(self.derivative_Z_wrt_A_prev(k).shape)
+            # print(self.derivative_A_wrt_Z(k - 1).shape)
 
-        # * DERIVATIVE OF LOSS wrt OUTPUT LAYER WEIGHT
-        dLoss_dOutput_weights = (
-            dOutput_layer_af_dOutput_layer_weights.T
-        ) * delta  # (1,2) * (1,1) , transpose dOutput_layer_af_dOutput_layer_weights to get (2,1) *(1,1) => (2, 1)
+            deltas[key] = temp
 
-        # * DERIVATIVE OF LOSS wrt OUTPUT LAYER BIAS
-        dLoss_dOutput_bias = (
-            dOutput_layer_af_dOutput_layer_bias
-        ) * delta  # (1,1) *(1,1) => (1, 1)
+        # print(self.get_deltas_matmul(0, deltas).shape)
+        # print(self.derivative_A_wrt_Z(-1).shape)
+        # print(self.derivative_Z_wrt_A_prev(0).shape)
+        # print(self.derivative_Z_wrt_W(0).shape)
 
-        # * DERIVATIVE OF LOSS wrt LAYER 1 or HIDDEN LAYER WEIGHT
-        dLoss_dLayer_1_weights = dLayer_1_wrt_dLayer_1_weights @ (
-            (
-                (
-                    dOutput_layer_af_dOutput_layer
-                    * delta  # (1,1) * (1,1) -> called output error signal
-                )
-                @ dOutput_layer_dLayer_1_af.T  # (2,1) -> transpose it to get (1,2) so that we can make matrix multiplocation with (1,1)
-                # => (1,1) @ (1,2) => (1,2)
-            )
-            * dLayer_1_af_dLayer_1  # (1,2) * (1,2) - element wise multiplication here instead of matmul
-        )  # @ dLayer_1_wrt_dLayer_1_weights.T  # (1,2) ->this output as 1,1 matrix, so we shift it to the front instead.
-
-        dLoss_dLayer_1_bias = (
-            (
-                (
-                    dOutput_layer_af_dOutput_layer
-                    * delta  # (1,1) * (1,1) -> called error signal
-                )
-                @ dOutput_layer_dLayer_1_af.T  # (2,1) -> transpose it to get (1,2) so that we can make matrix multiplocation with (1,1) with delta
-                # => (1,1) @ (1,2) => (1,2)
-            )
-            * dLayer_1_af_dLayer_1  # (1,2) * (1,2) - element wise multiplication here instead of matmul
-        ) * dLayer_1_wrt_dLayer_1_biases  # (1,2)
-
-        # print("\n--- Before Backpropagation ---")
-        # self.get_weight_logs()
-        # self.get_gradient_logs(
-        #     dLoss_dOutput_weights,
-        #     dLoss_dOutput_bias,
-        #     dLoss_dLayer_1_weights,
-        #     dLoss_dLayer_1_bias,
-        # )
-
-        self.layer1_weights -= self.learning_rate * dLoss_dLayer_1_weights
-        self.layer1_bias -= self.learning_rate * dLoss_dLayer_1_bias
-        self.output_weights -= self.learning_rate * dLoss_dOutput_weights
-        self.output_bias -= self.learning_rate * dLoss_dOutput_bias
-
-        # print("\n--- After Backpropagation ---")
-        # self.get_weight_logs()
-
-        return (
-            dLoss_dOutput_weights,
-            dLoss_dOutput_bias,
-            dLoss_dLayer_1_weights,
-            dLoss_dLayer_1_bias,
+        # 1. Calculate the 'error signal' (delta) for the input layer first
+        # This represents dL/dZ for the first hidden layer.
+        # It should result in a shape of (1, 4)
+        layer_0_delta = (
+            delta  # (1, 1)
+            * (
+                self.derivative_A_wrt_Z(-1) @ self.derivative_Z_wrt_A_prev(0)
+            )  # (1, 4) if matrix math is right
+            @ self.get_deltas_matmul(0, deltas)  # (4, 4)
         )
+
+        input_wt_gradient = self.derivative_Z_wrt_W(0).T @ layer_0_delta
+        output_wt_gradient = delta * self.derivative_Z_wrt_W(-1).T
+
+        print(f"Output Gradient Shape : {output_wt_gradient.shape}")
+        print(f"Input Gradient Shape : {input_wt_gradient.shape}")
+
+        hidden_wt_gradient = []
+
+        for h in range(
+            1, self.hidden_layers
+        ):  # starting from 1 as layer 0 is already calculated above
+            layer_temp_delta = delta * self.get_deltas_matmul(h, deltas)  # (1, 1)
+            print(f"layer_temp_delta {h} Shape : {layer_temp_delta.shape}")
+            print(
+                f"self.derivative_Z_wrt_W(h) {h} Shape : {self.derivative_Z_wrt_W(h).shape}"
+            )
+            hidden_wt_gradient_ = self.derivative_Z_wrt_W(h) * layer_temp_delta
+
+            print(f"Hidden Layer {h} Gradient Shape : {hidden_wt_gradient_.shape}")
+
+            hidden_wt_gradient.append(hidden_wt_gradient_)
+
+    def get_deltas_matmul(self, layer: int, deltas: dict):
+        temp = np.array([])
+        for i in range(self.hidden_layers - 1 - layer, 0, -1):
+            if temp.__len__() == 0:
+                key = f"delta_{i}"
+                temp = deltas[key]
+            else:
+                temp = temp @ deltas[key]
+
+        return temp
+
+    def derivative_A_wrt_Z(self, current_layer: int):
+
+        if current_layer < 0:
+            return ActivationFunction.relu_derivative(self.z_values[0])
+
+        return ActivationFunction.relu_derivative(self.z_values[current_layer])
+        # if type == "sigmoid":
+        #     ActivationFunction.sigmoid_derivative(self.activation_values[current_layer])
+        #     pass
+
+    def derivative_Z_wrt_A_prev(self, current_layer: int):
+        # if (
+        #     current_layer == self.hidden_layers - 1
+        # ):  # ie the output layer then use output weights
+        #     return self.output_weights  # (n, y_dim)
+        # elif current_layer == 0:
+        #     return self.input_weights
+        if current_layer == self.hidden_layers - 1:
+            return self.output_weights
+
+        return self.hidden_layer_weights[current_layer]
+
+    def derivative_Z_wrt_W(self, current_layer: int):
+        # Z = x * W + B => dZ/dW = x
+        if current_layer == 0:
+            return np.array(self.x_arr)
+
+        return self.activation_values[current_layer + 1]  # (1,n)
+
+        pass
 
     def get_gradient_logs(
         self,
@@ -164,34 +218,68 @@ class NeuralNetwork:
         print("Gradient w.r.t. output bias (dLoss_dOutput_bias):")
         print(np.array2string(dLoss_dOutput_bias, precision=4, separator=", "))
 
-    def get_weight_logs(self):
-        print("Layer 1 weights (self.layer1_weights):")
-        print(np.array2string(self.layer1_weights, precision=4, separator=", "))
+    def get_weight_logs(self, title="Model Weights & Biases"):
+        print(f"\n{'='*20} {title} {'='*20}")
 
-        print("Output weights (self.output_weights):")
+        # Input Layer
+        print(f"\n[INPUT LAYER]")
+        print(f"Weights (Shape: {self.input_weights.shape}):")
+        print(np.array2string(self.input_weights, precision=4, separator=", "))
+
+        # Hidden Layers
+        print(f"\n[HIDDEN LAYERS]")
+        for i, weights in enumerate(self.hidden_layer_weights):
+            print(f"Hidden Layer {i} Weights (Shape: {weights.shape}):")
+            print(np.array2string(weights, precision=4, separator=", "))
+
+            # Matching biases (assuming you have a bias for every hidden layer)
+            if i < len(self.hidden_layer_biases):
+                print(
+                    f"Hidden Layer {i} Bias (Shape: {self.hidden_layer_biases[i].shape}):"
+                )
+                print(
+                    np.array2string(
+                        self.hidden_layer_biases[i], precision=4, separator=", "
+                    )
+                )
+            print("-" * 15)
+
+        # Output Layer
+        print(f"\n[OUTPUT LAYER]")
+        print(f"Weights (Shape: {self.output_weights.shape}):")
         print(np.array2string(self.output_weights, precision=4, separator=", "))
-
-        print("Layer 1 bias (self.layer1_bias):")
-        print(np.array2string(self.layer1_bias, precision=4, separator=", "))
-
-        print("Output bias (self.output_bias):")
+        print(f"Bias (Shape: {self.output_bias.shape}):")
         print(np.array2string(self.output_bias, precision=4, separator=", "))
+        print(f"{'='*50}\n")
 
 
 if __name__ == "__main__":
-    NN = NeuralNetwork(learning_rate=0.1, epochs=10000)
-    print("\n--- Pre Train ---")
+    NN = NeuralNetwork(
+        x_arr=xor_input[:1],
+        y_arr=xor_output[:1],
+        learning_rate=0.1,
+        neurons_per_layer=4,
+        hidden_layers=3,
+        epochs=1,
+    )
+
+    # print("\n--- Pre Train ---")
     NN.get_weight_logs()
-    print("\n--- Pre Train Test ---")
-    for x, y in zip(xor_input, xor_output):
-        pred = NN.test(x)
-        print(f"Input: {x}, Expected: {y}, Got: {round(float(pred[0][0]), 4)}")
-    print(f"\n--- Start Train for {NN.epoch} epochs at learning rate {NN.learning_rate}---")
-    NN.train(xor_input, xor_output)
+
+    # print("\n--- Pre Train Test ---")
+    # for x, y in zip(xor_input, xor_output):
+    #     pred = NN.test(x)
+    #     print(f"Input: {x}, Expected: {y}, Got: {round(float(pred[0][0]), 4)}")
+
+    # print(
+    #     f"\n--- Start Train for {NN.epochs} epochs at learning rate {NN.learning_rate}---"
+    # )
+    NN.train()
+
     print("\n--- Post Train ---")
     NN.get_weight_logs()
-    print("\n--- Test ---")
-    for x, y in zip(xor_input, xor_output):
-        pred = NN.test(x)
-        print(f"Input: {x}, Expected: {y}, Got: {round(float(pred[0][0]), 4)}")
 
+    # print("\n--- Test ---")
+    # for x, y in zip(xor_input, xor_output):
+    #     pred = NN.test(x)
+    #     print(f"Input: {x}, Expected: {y}, Got: {round(float(pred[0][0]), 4)}")
