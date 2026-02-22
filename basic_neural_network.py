@@ -4,8 +4,8 @@ from back_propogation_helpers import NeuralNetworkHelpers
 from loss_functions import BinaryCrossEntropy
 from nn_utility import NeuralNetworkUtility
 
-xor_input = [[0, 0], [0, 1], [1, 0], [1, 1]]
-xor_output = [0, 1, 1, 0]
+xor_input = [[0, 1],[0, 0],  [1, 0], [1, 1]]
+xor_output = [1, 0, 1, 0]
 
 
 class NeuralNetwork:
@@ -72,6 +72,7 @@ class NeuralNetwork:
         return self.forward_pass(x)
 
     def forward_pass(self, x):
+        # print('FORWARD PASS')
         #       Z                       |   NAME         | NEXT STEP
         # Z0 = X @ Win + B0             | Hidden Layer 1 | A0
         # Z1 = A0 @ W0 + B1             | Hidden Layer 2 | A1
@@ -86,12 +87,14 @@ class NeuralNetwork:
         )  # If there are h hidden layers, then there will be h+1 z values. (The extra one is output)
         self.activation_values = []
 
-        for k in range(total_layers):
+        for k in range( total_layers):
             if k == 0:  # ie Z0 => Hidden Layer 1
+                # print(f"CALCULATING Z{k}")
                 z = x @ self.input_weights + self.hidden_layer_biases[k]
                 a = ActivationFunction.relu(z)
 
             elif k == total_layers - 1:  # ie Zk => Output Layer
+                # print(f"CALCULATING OUTPUT Z ie Zk or z{k}")
                 z = (
                     self.activation_values[k - 1] @ self.output_weights
                     + self.output_bias
@@ -99,8 +102,9 @@ class NeuralNetwork:
                 a = ActivationFunction.sigmoid(z)
 
             else:
+                # print(f"CALCULATING z{k}")
                 z = (
-                    self.activation_values[k - 1] @ self.hidden_layer_weights[k]
+                    self.activation_values[k-1] @ self.hidden_layer_weights[k-1]
                     + self.hidden_layer_biases[k]
                 )
                 a = ActivationFunction.relu(z)
@@ -126,7 +130,7 @@ class NeuralNetwork:
         # delta_i = d_z_i+1/d_A_i * dA_i/d_Z_i
 
         # deltas = self.helpers.get_deltas(self)
-        for i in range(-1, self.hidden_layers + 1):  # -1, 0, 1 ... k-1, Wk-1 = W_out
+        for i in range(-1, self.hidden_layers ):  # -1, 0, 1 ... k-1, Wk-1 = W_out
             # print('-'*50)
             # if i == -1:
             #     print('[back_propogation] For INPUT WEIGHTS')
@@ -141,11 +145,9 @@ class NeuralNetwork:
             # print(f'[back_propogation]Shape delta_chain {i}: {delta_chain.shape} ')
 
             w = dZ_dW_prev @ (delta * delta_chain)
-            if i > -1:
-                b = delta * delta_chain * 1
-            else:
-                b = 1
-            # print('')
+
+            b = delta * delta_chain * 1
+     
             if i == -1:
                 # print(f'[back_propogation] INPUT WEIGHT GRADIENT SHAPE: {w.shape} ')
                 # print(f'[back_propogation] INPUT WEIGHT GRADIENT: {w} ')
@@ -173,8 +175,8 @@ if __name__ == "__main__":
         x_arr=xor_input,
         y_arr=xor_output,
         learning_rate=0.1,
-        neurons_per_layer=4,
-        hidden_layers=5,
+        neurons_per_layer=100,
+        hidden_layers=3,
         epochs=1000,
     )
     print(
@@ -187,7 +189,7 @@ if __name__ == "__main__":
     print("\n--- Pre Train Test ---")
     for x, y in zip(xor_input, xor_output):
         pred = NN.test(x)
-        print(f"Input: {x}, Expected: {y}, Got: {round(float(pred[0][0]), 4)}")
+        print(f"Input: {x}, Expected: {y}, Got: {round(float(pred[0][0]), 8)}")
 
     print(
         f"\n--- Start Train for {NN.epochs} epochs at learning rate {NN.learning_rate}---"
@@ -198,10 +200,10 @@ if __name__ == "__main__":
     print("\n--- Post Train ---")
     # NN.utility.get_weight_logs(NN)
     # NN.utility.get_activation_logs(NN)
-    # NN.utility.get_weight_shape_logs(NN)
+    NN.utility.get_weight_shape_logs(NN)
     # NN.utility.get_gradient_logs(NN)
 
     print("\n--- Test ---")
     for x, y in zip(xor_input, xor_output):
         pred = NN.test(x)
-        print(f"Input: {x}, Expected: {y}, Got: {round(float(pred[0][0]), 4)}")
+        print(f"Input: {x}, Expected: {y}, Got: {round(float(pred[0][0]), 8)}")

@@ -24,12 +24,12 @@ class ActivationFunction():
     @staticmethod
     def _he_init(fan_in, fan_out):
         """Best for ReLU and variants (LeakyReLU, ELU, etc.)"""
-        return np.random.randn(fan_in, fan_out) #* np.sqrt(2 / fan_in)
+        return np.random.randn(fan_in, fan_out) * np.sqrt(2 / fan_in)
 
     @staticmethod
     def _xavier_init(fan_in, fan_out):
         """Best for sigmoid, tanh, softplus - keeps variance stable across layers."""
-        return np.random.randn(fan_in, fan_out) #* np.sqrt(1 / fan_in)
+        return np.random.randn(fan_in, fan_out) * np.sqrt(1 / fan_in)
     
 
     def sigmoid(x):
