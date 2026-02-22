@@ -1,6 +1,8 @@
 import numpy as np
 from activation_functions import ActivationFunction
+from back_propogation_helpers import NeuralNetworkHelpers
 from loss_functions import BinaryCrossEntropy
+from nn_utility import NeuralNetworkUtility
 
 xor_input = [[0, 0], [0, 1], [1, 0], [1, 1]]
 xor_output = [0, 1, 1, 0]
@@ -33,16 +35,18 @@ class NeuralNetwork:
 
         self.hidden_layer_weights = [
             np.random.rand(self.neurons_per_layer, self.neurons_per_layer)
-            for i in range(self.hidden_layers - 1)
+            for i in range(self.hidden_layers)
         ]
-
         self.hidden_layer_biases = [
-            np.random.rand(1, self.neurons_per_layer) for i in range(self.hidden_layers)
+            np.random.rand(1, self.neurons_per_layer)
+            for i in range(self.hidden_layers + 1)
         ]
 
         self.output_weights = np.random.rand(self.neurons_per_layer, self.y_dim)
-
         self.output_bias = np.random.rand(1, self.y_dim)
+
+        self.utility = NeuralNetworkUtility()
+        self.helpers = NeuralNetworkHelpers()
 
     def train(self):
         if self.x_dim < 1 or self.y_dim < 1:
@@ -63,223 +67,129 @@ class NeuralNetwork:
         return self.forward_pass(x)
 
     def forward_pass(self, x):
+        #       Z                       |   NAME         | NEXT STEP
+        # Z0 = X @ Win + B0             | Hidden Layer 1 | A0
+        # Z1 = A0 @ W0 + B1             | Hidden Layer 2 | A1
+        # .                             |                |
+        # .                             |                |
+        # Zk-1 = A_k-2 @ W_k-2 + Bk-1   | Hidden Layer k | A_k-1  (here k-1 == no. of hidden layers (h))
+        # Zk = A_k-1 @ Wout + Bout      | Output Layer   | A_k    (Sigmoid) <=> y_pred
 
-        # INPUT TO FIRST HIDDEN LAYER:
-        x_l = x @ self.input_weights
-        self.activation_values = []
         self.z_values = []
+        total_layers = (
+            self.hidden_layers + 1
+        )  # If there are h hidden layers, then there will be h+1 z values. (The extra one is output)
 
-        # HIDDEN LAYER TO LAST LAYER
-        for current_layer in range(self.hidden_layers):
-            # print(self.activation_values)
-            # LAST LAYER TO OUTPUT
-            if current_layer == self.hidden_layers - 1:
-                l = (
-                    self.activation_values[current_layer - 1] @ self.output_weights
+        self.activation_values = []
+
+        for k in range(total_layers):
+            if k == 0:  # ie Z0 => Hidden Layer 1
+                z = x @ self.input_weights + self.hidden_layer_biases[k]
+                a = ActivationFunction.relu(z)
+
+            elif k == total_layers - 1:  # ie Zk => Output Layer
+                z = (
+                    self.activation_values[k - 1] @ self.output_weights
                     + self.output_bias
                 )
-                a = ActivationFunction.sigmoid(l)
-                self.activation_values.append(a)
-                return a
+                a = ActivationFunction.sigmoid(z)
 
-            if current_layer == 0:
-                l = x_l + self.hidden_layer_biases[current_layer]
-                
             else:
-                l = (
-                    self.activation_values[current_layer - 1]
-                    @ self.hidden_layer_weights[current_layer]
-                    + self.hidden_layer_biases[current_layer]
+                z = (
+                    self.activation_values[k - 1] @ self.hidden_layer_weights[k]
+                    + self.hidden_layer_biases[k]
                 )
+                a = ActivationFunction.relu(z)
+                # self.hidden_layer_weights consists of only hidden layer weights, the list starts from W0 (Win is a seperate attribute)
+                # hence the length of the list is self.hidden_layer - 1, making k here equivalent to k-1.
 
-            self.z_values.append(l)
-            a = ActivationFunction.relu(l)
+            self.z_values.append(z)
             self.activation_values.append(a)
 
+        return self.activation_values[-1]
+
     def back_propogation(self, x, y_pred, y):
+        self.helpers.deltas = {}
+
         delta = BinaryCrossEntropy(
             y_pred=y_pred, y_true=y
-        ).derivative_bce_wrt_y_pred() * ActivationFunction.sigmoid_derivative(
-            y_pred
-        )  # (1,1)
+        ).d_Loss_d_y_pred() * ActivationFunction.sigmoid_derivative(y_pred)
 
-        deltas = {}
+        # FOR A LAYER m, and hidden_layer = k the gradient will be
+        # dL/DWm = delta * delta_k-1 * delta_k-2 * ... * delta_m+1 * d_Zm+1/d_Wm
+        # 
+        # FOR SOME delta_i, where i range from [0, k-1]
+        # delta_i = d_z_i+1/d_A_i * dA_i/d_Z_i
 
-        for k in range(
-            self.hidden_layers - 1, 0, -1
-        ):  # Hidden Layer 0 ie delta 0 involves input weights which is currently leading to incompatible element-wise multiplcation, hence has to be done seperately.
-            eqn = f"dz_{k+1}/da_{k}*da_{k}/dz_{k}"
-            key = f"delta_{k}"
-            # print(f"{key} : {eqn}")
-            temp = self.derivative_Z_wrt_A_prev(k) * self.derivative_A_wrt_Z(k - 1)
-            # print(self.derivative_Z_wrt_A_prev(k).shape)
-            # print(self.derivative_A_wrt_Z(k - 1).shape)
+        # deltas = self.helpers.get_deltas(self)
+        for i in range(-1, self.hidden_layers + 1):
+            # print('-'*50)
+            # if i == -1:
+            #     print('[back_propogation] For INPUT WEIGHTS')
+            # elif i == self.hidden_layers :
+            #     print('[back_propogation] For OUTPUT WEIGHTS')
+            # else:
+            #     print(f'[back_propogation] For HIDDEN LAYER {i}')
+            # print('-'*50)
+            dZ_dW_prev = self.helpers.dZ_dW_prev(self, x_input=x, layer=i)
+            delta_chain = self.helpers.delta_chain(self, i)
+            # print(f'[back_propogation]Shape dZ_dW_prev {i}: {dZ_dW_prev.shape}')
+            # print(f'[back_propogation]Shape delta_chain {i}: {delta_chain.shape} ')
 
-            deltas[key] = temp
-
-        # print(self.get_deltas_matmul(0, deltas).shape)
-        # print(self.derivative_A_wrt_Z(-1).shape)
-        # print(self.derivative_Z_wrt_A_prev(0).shape)
-        # print(self.derivative_Z_wrt_W(0).shape)
-
-        # 1. Calculate the 'error signal' (delta) for the input layer first
-        # This represents dL/dZ for the first hidden layer.
-        # It should result in a shape of (1, 4)
-        layer_0_delta = (
-            delta  # (1, 1)
-            * (
-                self.derivative_A_wrt_Z(-1) @ self.derivative_Z_wrt_A_prev(0)
-            )  # (1, 4) if matrix math is right
-            @ self.get_deltas_matmul(0, deltas)  # (4, 4)
-        )
-
-        input_wt_gradient = self.derivative_Z_wrt_W(0).T @ layer_0_delta
-        output_wt_gradient = delta * self.derivative_Z_wrt_W(-1).T
-
-        print(f"Output Gradient Shape : {output_wt_gradient.shape}")
-        print(f"Input Gradient Shape : {input_wt_gradient.shape}")
-
-        hidden_wt_gradient = []
-
-        for h in range(
-            1, self.hidden_layers
-        ):  # starting from 1 as layer 0 is already calculated above
-            layer_temp_delta = delta * self.get_deltas_matmul(h, deltas)  # (1, 1)
-            print(f"layer_temp_delta {h} Shape : {layer_temp_delta.shape}")
-            print(
-                f"self.derivative_Z_wrt_W(h) {h} Shape : {self.derivative_Z_wrt_W(h).shape}"
-            )
-            hidden_wt_gradient_ = self.derivative_Z_wrt_W(h) * layer_temp_delta
-
-            print(f"Hidden Layer {h} Gradient Shape : {hidden_wt_gradient_.shape}")
-
-            hidden_wt_gradient.append(hidden_wt_gradient_)
-
-    def get_deltas_matmul(self, layer: int, deltas: dict):
-        temp = np.array([])
-        for i in range(self.hidden_layers - 1 - layer, 0, -1):
-            if temp.__len__() == 0:
-                key = f"delta_{i}"
-                temp = deltas[key]
+            w =  delta * (dZ_dW_prev @ delta_chain)
+            if i > -1:
+                b = delta * delta_chain * 1
             else:
-                temp = temp @ deltas[key]
+                b = 1
+            # print('')
+            if i == -1:
+                # print(f'[back_propogation] INPUT WEIGHT GRADIENT SHAPE: {w.shape} ')
+                self.input_weights -= w * self.learning_rate
 
-        return temp
-
-    def derivative_A_wrt_Z(self, current_layer: int):
-
-        if current_layer < 0:
-            return ActivationFunction.relu_derivative(self.z_values[0])
-
-        return ActivationFunction.relu_derivative(self.z_values[current_layer])
-        # if type == "sigmoid":
-        #     ActivationFunction.sigmoid_derivative(self.activation_values[current_layer])
-        #     pass
-
-    def derivative_Z_wrt_A_prev(self, current_layer: int):
-        # if (
-        #     current_layer == self.hidden_layers - 1
-        # ):  # ie the output layer then use output weights
-        #     return self.output_weights  # (n, y_dim)
-        # elif current_layer == 0:
-        #     return self.input_weights
-        if current_layer == self.hidden_layers - 1:
-            return self.output_weights
-
-        return self.hidden_layer_weights[current_layer]
-
-    def derivative_Z_wrt_W(self, current_layer: int):
-        # Z = x * W + B => dZ/dW = x
-        if current_layer == 0:
-            return np.array(self.x_arr)
-
-        return self.activation_values[current_layer + 1]  # (1,n)
-
-        pass
-
-    def get_gradient_logs(
-        self,
-        dLoss_dOutput_weights,
-        dLoss_dOutput_bias,
-        dLoss_dLayer_1_weights,
-        dLoss_dLayer_1_bias,
-    ):
-        print("\n--- Gradients ---")
-        # Pretty-print gradient matrices
-        print("Gradient w.r.t. layer 1 weights (dLoss_dLayer_1_weights):")
-        print(np.array2string(dLoss_dLayer_1_weights, precision=4, separator=", "))
-
-        print("Gradient w.r.t. output weights (dLoss_dOutput_weights):")
-        print(np.array2string(dLoss_dOutput_weights, precision=4, separator=", "))
-
-        print("Gradient w.r.t. layer 1 bias (dLoss_dLayer_1_bias):")
-        print(np.array2string(dLoss_dLayer_1_bias, precision=4, separator=", "))
-
-        print("Gradient w.r.t. output bias (dLoss_dOutput_bias):")
-        print(np.array2string(dLoss_dOutput_bias, precision=4, separator=", "))
-
-    def get_weight_logs(self, title="Model Weights & Biases"):
-        print(f"\n{'='*20} {title} {'='*20}")
-
-        # Input Layer
-        print(f"\n[INPUT LAYER]")
-        print(f"Weights (Shape: {self.input_weights.shape}):")
-        print(np.array2string(self.input_weights, precision=4, separator=", "))
-
-        # Hidden Layers
-        print(f"\n[HIDDEN LAYERS]")
-        for i, weights in enumerate(self.hidden_layer_weights):
-            print(f"Hidden Layer {i} Weights (Shape: {weights.shape}):")
-            print(np.array2string(weights, precision=4, separator=", "))
-
-            # Matching biases (assuming you have a bias for every hidden layer)
-            if i < len(self.hidden_layer_biases):
-                print(
-                    f"Hidden Layer {i} Bias (Shape: {self.hidden_layer_biases[i].shape}):"
-                )
-                print(
-                    np.array2string(
-                        self.hidden_layer_biases[i], precision=4, separator=", "
-                    )
-                )
-            print("-" * 15)
-
-        # Output Layer
-        print(f"\n[OUTPUT LAYER]")
-        print(f"Weights (Shape: {self.output_weights.shape}):")
-        print(np.array2string(self.output_weights, precision=4, separator=", "))
-        print(f"Bias (Shape: {self.output_bias.shape}):")
-        print(np.array2string(self.output_bias, precision=4, separator=", "))
-        print(f"{'='*50}\n")
+            elif i == self.hidden_layers:
+                # print(f'[back_propogation] OUTPUT WEIGHT GRADIENT SHAPE: {w.shape} ')
+                # print(f'[back_propogation] OUTPUT BIAS GRADIENT SHAPE: {b.shape} ')
+                self.output_weights -= w * self.learning_rate
+                self.output_bias -= b * self.learning_rate
+         
+            else:
+                # print(f'[back_propogation]HIDDEN LAYER WEIGHT GRADIENT SHAPE {i}: {w.shape} ')
+                # print(f'[back_propogation]HIDDEN LAYER BIAS GRADIENT SHAPE {i}: {b.shape} ')
+                self.hidden_layer_weights[i] -= w * self.learning_rate
+                self.hidden_layer_biases[i] -= b * self.learning_rate
 
 
 if __name__ == "__main__":
     NN = NeuralNetwork(
-        x_arr=xor_input[:1],
-        y_arr=xor_output[:1],
+        x_arr=xor_input,
+        y_arr=xor_output,
         learning_rate=0.1,
         neurons_per_layer=4,
         hidden_layers=3,
-        epochs=1,
+        epochs=10000,
     )
 
-    # print("\n--- Pre Train ---")
-    NN.get_weight_logs()
+    print("\n--- Pre Train ---")
+    # NN.utility.get_weight_logs(NN)
 
-    # print("\n--- Pre Train Test ---")
-    # for x, y in zip(xor_input, xor_output):
-    #     pred = NN.test(x)
-    #     print(f"Input: {x}, Expected: {y}, Got: {round(float(pred[0][0]), 4)}")
+    print("\n--- Pre Train Test ---")
+    for x, y in zip(xor_input, xor_output):
+        pred = NN.test(x)
+        print(f"Input: {x}, Expected: {y}, Got: {round(float(pred[0][0]), 4)}")
 
-    # print(
-    #     f"\n--- Start Train for {NN.epochs} epochs at learning rate {NN.learning_rate}---"
-    # )
+    print(
+        f"\n--- Start Train for {NN.epochs} epochs at learning rate {NN.learning_rate}---"
+    )
+    # NN.utility.get_weight_shape_logs(NN)
     NN.train()
 
     print("\n--- Post Train ---")
-    NN.get_weight_logs()
+    # NN.utility.get_weight_logs(NN)
+    # NN.utility.get_weight_shape_logs(NN)
+    # NN.utility.get_gradient_logs(NN)
 
-    # print("\n--- Test ---")
-    # for x, y in zip(xor_input, xor_output):
-    #     pred = NN.test(x)
-    #     print(f"Input: {x}, Expected: {y}, Got: {round(float(pred[0][0]), 4)}")
+
+    print("\n--- Test ---")
+    for x, y in zip(xor_input, xor_output):
+        pred = NN.test(x)
+        print(f"Input: {x}, Expected: {y}, Got: {round(float(pred[0][0]), 4)}")

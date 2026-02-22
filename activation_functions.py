@@ -1,6 +1,16 @@
 import numpy as np
 
-class ActivationFunction:
+class ActivationFunctionType():
+
+    def __init__(self) -> None:
+        self.relu = 'relu'
+        self.sigmoid = 'sigmoid'
+
+
+class ActivationFunction():
+    def __init__(self) -> None:
+        self.type = ActivationFunctionType()
+    
 
     def sigmoid(x):
         """
