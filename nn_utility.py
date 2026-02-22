@@ -4,7 +4,6 @@ import numpy as np
 class NeuralNetworkUtility:
 
     def get_gradient_logs(self, nn, title="Current Gradients"):
-        import numpy as np
 
         print(f"\n{'='*20} {title} {'='*20}")
 
@@ -12,7 +11,7 @@ class NeuralNetworkUtility:
         if hasattr(nn, "input_weights_grad"):
             print(f"\n[INPUT LAYER]")
             print(
-                f"Gradient w.r.t. Input Weights (Shape: {nn.input_weights_grad.shape}):"
+                f"Gradient w.r.t. Input Weights (Shape: {nn.i.shape}):"
             )
             print(np.array2string(nn.input_weights_grad, precision=4, separator=", "))
         else:

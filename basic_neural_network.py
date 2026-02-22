@@ -17,7 +17,13 @@ class NeuralNetwork:
         learning_rate=0.1,
         neurons_per_layer=2,
         hidden_layers=2,
+        layer_activation="relu",
+        output_activation="sigmoid",
     ) -> None:
+        self.layer_activation = layer_activation
+        self.output_activation = output_activation
+        init = ActivationFunction.get_initializer(layer_activation)
+        output_init = ActivationFunction.get_initializer(output_activation)
 
         self.x_arr = x_arr
         self.y_arr = y_arr
@@ -31,19 +37,18 @@ class NeuralNetwork:
         self.neurons_per_layer = neurons_per_layer
         self.hidden_layers = hidden_layers
 
-        self.input_weights = np.random.rand(self.x_dim, self.neurons_per_layer)
-
+        self.input_weights = init(self.x_dim, self.neurons_per_layer)
         self.hidden_layer_weights = [
-            np.random.rand(self.neurons_per_layer, self.neurons_per_layer)
-            for i in range(self.hidden_layers)
+            init(self.neurons_per_layer, self.neurons_per_layer)
+            for _ in range(self.hidden_layers)
         ]
-        self.hidden_layer_biases = [
-            np.random.rand(1, self.neurons_per_layer)
-            for i in range(self.hidden_layers + 1)
-        ]
+        self.output_weights = init(self.neurons_per_layer, self.y_dim)
 
-        self.output_weights = np.random.rand(self.neurons_per_layer, self.y_dim)
-        self.output_bias = np.random.rand(1, self.y_dim)
+        # Biases to zero - works well for all activations
+        self.hidden_layer_biases = [
+            np.zeros((1, self.neurons_per_layer)) for _ in range(self.hidden_layers + 1)
+        ]
+        self.output_bias = np.zeros((1, self.y_dim))
 
         self.utility = NeuralNetworkUtility()
         self.helpers = NeuralNetworkHelpers()
@@ -79,7 +84,6 @@ class NeuralNetwork:
         total_layers = (
             self.hidden_layers + 1
         )  # If there are h hidden layers, then there will be h+1 z values. (The extra one is output)
-
         self.activation_values = []
 
         for k in range(total_layers):
@@ -102,7 +106,6 @@ class NeuralNetwork:
                 a = ActivationFunction.relu(z)
                 # self.hidden_layer_weights consists of only hidden layer weights, the list starts from W0 (Win is a seperate attribute)
                 # hence the length of the list is self.hidden_layer - 1, making k here equivalent to k-1.
-
             self.z_values.append(z)
             self.activation_values.append(a)
 
@@ -111,18 +114,19 @@ class NeuralNetwork:
     def back_propogation(self, x, y_pred, y):
         self.helpers.deltas = {}
 
-        delta = BinaryCrossEntropy(
-            y_pred=y_pred, y_true=y
-        ).d_Loss_d_y_pred() * ActivationFunction.sigmoid_derivative(y_pred)
+        # delta = BinaryCrossEntropy(
+        #     y_pred=y_pred, y_true=y
+        # ).d_Loss_d_y_pred() * ActivationFunction.sigmoid_derivative(y_pred)
 
+        delta = y_pred - y
         # FOR A LAYER m, and hidden_layer = k the gradient will be
         # dL/DWm = delta * delta_k-1 * delta_k-2 * ... * delta_m+1 * d_Zm+1/d_Wm
-        # 
+        #
         # FOR SOME delta_i, where i range from [0, k-1]
         # delta_i = d_z_i+1/d_A_i * dA_i/d_Z_i
 
         # deltas = self.helpers.get_deltas(self)
-        for i in range(-1, self.hidden_layers + 1):
+        for i in range(-1, self.hidden_layers + 1):  # -1, 0, 1 ... k-1, Wk-1 = W_out
             # print('-'*50)
             # if i == -1:
             #     print('[back_propogation] For INPUT WEIGHTS')
@@ -136,7 +140,7 @@ class NeuralNetwork:
             # print(f'[back_propogation]Shape dZ_dW_prev {i}: {dZ_dW_prev.shape}')
             # print(f'[back_propogation]Shape delta_chain {i}: {delta_chain.shape} ')
 
-            w =  delta * (dZ_dW_prev @ delta_chain)
+            w = dZ_dW_prev @ (delta * delta_chain)
             if i > -1:
                 b = delta * delta_chain * 1
             else:
@@ -144,17 +148,22 @@ class NeuralNetwork:
             # print('')
             if i == -1:
                 # print(f'[back_propogation] INPUT WEIGHT GRADIENT SHAPE: {w.shape} ')
+                # print(f'[back_propogation] INPUT WEIGHT GRADIENT: {w} ')
                 self.input_weights -= w * self.learning_rate
 
             elif i == self.hidden_layers:
                 # print(f'[back_propogation] OUTPUT WEIGHT GRADIENT SHAPE: {w.shape} ')
                 # print(f'[back_propogation] OUTPUT BIAS GRADIENT SHAPE: {b.shape} ')
+                # print(f'[back_propogation] OUTPUT WEIGHT GRADIENT : {w} ')
+                # print(f'[back_propogation] OUTPUT BIAS GRADIENT : {b} ')
                 self.output_weights -= w * self.learning_rate
                 self.output_bias -= b * self.learning_rate
-         
+
             else:
                 # print(f'[back_propogation]HIDDEN LAYER WEIGHT GRADIENT SHAPE {i}: {w.shape} ')
                 # print(f'[back_propogation]HIDDEN LAYER BIAS GRADIENT SHAPE {i}: {b.shape} ')
+                # print(f'[back_propogation]HIDDEN LAYER WEIGHT GRADIENT {i}: {w} ')
+                # print(f'[back_propogation]HIDDEN LAYER BIAS GRADIENT {i}: {b} ')
                 self.hidden_layer_weights[i] -= w * self.learning_rate
                 self.hidden_layer_biases[i] -= b * self.learning_rate
 
@@ -165,8 +174,11 @@ if __name__ == "__main__":
         y_arr=xor_output,
         learning_rate=0.1,
         neurons_per_layer=4,
-        hidden_layers=3,
-        epochs=10000,
+        hidden_layers=5,
+        epochs=1000,
+    )
+    print(
+        f"\nNeural Network Details:\nNeurons Per Hidden Layer: {NN.neurons_per_layer}\nNo. Of Hidden Layers = {NN.hidden_layers}"
     )
 
     print("\n--- Pre Train ---")
@@ -185,9 +197,9 @@ if __name__ == "__main__":
 
     print("\n--- Post Train ---")
     # NN.utility.get_weight_logs(NN)
+    # NN.utility.get_activation_logs(NN)
     # NN.utility.get_weight_shape_logs(NN)
     # NN.utility.get_gradient_logs(NN)
-
 
     print("\n--- Test ---")
     for x, y in zip(xor_input, xor_output):

@@ -27,6 +27,7 @@ class NeuralNetworkHelpers:
 
             dAprevDZprev = ActivationFunction.relu_derivative(NN.activation_values[i])
             # print(f"[get_deltas]Shape dA{i}/dZ{i} : {dAprevDZprev.shape}")
+            # print(f"[get_deltas]dA{i}/dZ{i} : {dAprevDZprev}")
 
             # dZ/dA_prev = W_prev
             # When i = k - 1, W_prev = W_out
@@ -36,13 +37,16 @@ class NeuralNetworkHelpers:
                 dZdAprev = NN.hidden_layer_weights[i].T  # (n,n)
 
             # print(f"[get_deltas]Shape dZ{i + 1}/dA{i} : {dZdAprev.shape}")
+            # print(f"[get_deltas] dZ{i + 1}/dA{i} : {dZdAprev}")
 
             if i == k - 1:
                 self.deltas[key] = dZdAprev * dAprevDZprev
             else:
 
-                self.deltas[key] = dAprevDZprev @ dZdAprev
+                self.deltas[key] = dAprevDZprev * dZdAprev
             # print(f"[get_deltas]Shape {key}: { self.deltas[key].shape}\n")
+            # print(f"[get_deltas]Shape {key}: { self.deltas[key].shape}\n")
+            # print(self.deltas)
 
         return self.deltas
 
@@ -94,7 +98,7 @@ class NeuralNetworkHelpers:
                 prev_shape = temp.shape
                 # Matrix multiplication: (Batch x N) @ (N x M) -> (Batch x M)
                 # print(f"[delta_chain]Prev shape {prev_shape}")
-                temp = delta_i * temp
+                temp = temp @ delta_i
                 # print(
                 #     f"[delta_chain]Multiplied by delta_{i} ({delta_i.shape}).New Shape: {prev_shape} * {delta_i.shape} -> {temp.shape}"
                 # )
@@ -106,7 +110,7 @@ class NeuralNetworkHelpers:
 
         return temp
 
-    def dZ_dW_prev(self, NN, x_input, layer):
+    def dZ_dW_prev(self, NN, x_input, layer): 
         """
         Here, layer = the layer of which's gradient we are finding.
             -1 = Input Layer
@@ -134,10 +138,8 @@ class NeuralNetworkHelpers:
         returns d_Zm+1/d_Wm
         """
         if layer == -1:
-            return np.array(x_input).reshape(-1, 1)
-        # print([x.shape for x in NN.activation_values])
-
-        if layer == NN.hidden_layers:  # else it would output A[k] => The final activation, ie y_pred
+            return np.array(x_input).reshape(-1,1)
+        if layer == NN.hidden_layers:
             return NN.activation_values[layer - 1].T
 
         return NN.activation_values[layer].T
