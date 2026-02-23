@@ -1,11 +1,16 @@
 import numpy as np
-from activation_functions import ActivationFunction
-from neural_network_helpers import NeuralNetworkHelpers
-from loss_functions import BinaryCrossEntropy
-from nn_utility import NeuralNetworkUtility
+from .activation_functions import ActivationFunction
+from .neural_network_helpers import NeuralNetworkHelpers
+from .loss_functions import BinaryCrossEntropy
+from .nn_utility import NeuralNetworkUtility
 
 xor_input = [[0, 1], [0, 0], [1, 0], [1, 1]]
 xor_output = [1, 0, 1, 0]
+
+from sklearn.datasets import load_breast_cancer
+
+data = load_breast_cancer()
+x, y = data.data, data.target
 
 
 class NeuralNetwork:
@@ -30,8 +35,9 @@ class NeuralNetwork:
         self.y_arr = y_arr
 
         self.x_dim = x_arr[0].__len__()  # Shape of Input X_i
+        y_sample = np.array(y_arr[0])
         self.y_dim = (
-            1 if type(y_arr[0]) == int else y_arr[0].__len__()
+            1 if y_sample.ndim == 0 else y_sample.shape[0]
         )  # Shape of Output/Label
 
         self.epochs = epochs
@@ -153,18 +159,18 @@ class NeuralNetwork:
     def back_propogation(self, x, y_pred, y):
         # In Back Propogation, We move from right to left, ie, from Output till Tnput
         # The Chain May Look Like:
-        # NOTE: THE HIDDEN LAYER WEIGHT LIST RANGES FROM [0 ... k-2] 
+        # NOTE: THE HIDDEN LAYER WEIGHT LIST RANGES FROM [0 ... k-2]
         #       The Loop Below is designed to accomodate around this Hidden Layer Weight List
-        #       Implying, -1 = Input Weights, [k-1] => Output Weights. 
+        #       Implying, -1 = Input Weights, [k-1] => Output Weights.
         #
-        #       This can also be seen in the Forward Pass Loop 
+        #       This can also be seen in the Forward Pass Loop
         #       ```
         #           # Zk = Ak-1 # Wk-1 + Bk
         #           # -> The Hidden Layer weights range is [0 .. k-2], as Input weights and Output weights are defined seperately.
         #           # -> Therefore at i = k, Wk-1 will basically imply W_out.
         #       ```
 
-        #           
+        #
         # WEIGHT                                |  CHAIN
         # W_k-1 (W_out)                         |  dLoss/dW_k-1 = dLoss/dA[k] * dA[k]/dZ[k] * dZ[k]/dW[k-1]
         # W_k-2 (Last Hidden Layer)             |  dLoss/dW_k-2 = DELTA * {{dZ[k]/dA[k-1] * dA[k-1]/dZ[k-1]}} * dZ[k-1]/dW[k-2]
@@ -216,7 +222,7 @@ class NeuralNetwork:
                 # print(f'[back_propogation] INPUT WEIGHT GRADIENT: {w} ')
                 self.input_weights -= w * self.learning_rate
 
-            elif i == self.hidden_layers-1:
+            elif i == self.hidden_layers - 1:
                 # print(f'[back_propogation] OUTPUT WEIGHT GRADIENT SHAPE: {w.shape} ')
                 # print(f'[back_propogation] OUTPUT BIAS GRADIENT SHAPE: {b.shape} ')
                 # print(f'[back_propogation] OUTPUT WEIGHT GRADIENT : {w} ')
@@ -235,8 +241,8 @@ class NeuralNetwork:
 
 if __name__ == "__main__":
     NN = NeuralNetwork(
-        x_arr=xor_input,
-        y_arr=xor_output,
+        x_arr=x,
+        y_arr=y,
         learning_rate=0.1,
         neurons_per_layer=2,
         hidden_layers=1,
