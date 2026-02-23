@@ -100,45 +100,23 @@ class NeuralNetworkHelpers:
         # k-1 (Output Wt) | None
 
         k = NN.hidden_layers
-        if m == k - 1:  # (ie  Output layer)
-            # No Delta Chain from deltas in self.delta
-            # dL/dW_out = DELTA * dZ[k]/W[k-1], where DELTA = DL/DA[k] * DA[k]/DZ[k]
-            return np.array([[1]])
 
+        if m == k-1:
+            return np.array([[1]])
+        
         temp = np.array([])
 
-        # In the Loop Below where we multiply deltas, at m = k, the range becomes (k-1, k)
-        # And for range(start, stop), start is inclusive & stop is exclusive, the loop essentially
-        # does not run at m = k
-        # HENCE, we need to explicitly return the temp for this.
-        # dL/dWk = DELTA *
-        if m == k:
-            temp = self.deltas[f"delta_{m}"]
-
-        # Range = [Index of Last Hidden Layer ie k-1, Current Layer's Index)        # [ = including, ) = excluding
-        # Ex: For W_input gradient: The chain starts from delta_k-1 till delta_0,
-        # Hence we put k-1 as start, and layer as end
         for i in range(k-1, m, -1):
-            delta_i = self.deltas[f"delta_{i}"]
-            
-            if temp.size == 0:
-                temp = delta_i
-                # print(
-                #     f"Initialization: Start chain with delta_{i}. Shape: {temp.shape}"
-                # )
-            else:
-                prev_shape = temp.shape
-                # Matrix multiplication: (Batch x N) @ (N x M) -> (Batch x M)
-                # print(f"[delta_chain]Prev shape {prev_shape}")
-                temp = temp @ delta_i
-                # print(
-                    # f"[delta_chain]Multiplied by delta_{i} ({delta_i.shape}).New Shape: {prev_shape} * {delta_i.shape} -> {temp.shape}"
-                # )
 
-        # if temp.size > 0:
-        # print(
-        #     f"[delta_chain]Chain Complete for Layer {layer}. Final Chain Shape: {temp.shape}\n"
-        # )
+            key = f'delta_{i}'
+            delta_i = self.deltas[key]
+            # print(key, delta_i.shape)
+            if temp.__len__() == 0:
+                # print(f'Temp state:{temp.__len__()}, init temp with {key}: {delta_i.shape}')
+                temp = delta_i
+            else:
+                # print(f'temp x delta {i}:{ temp.shape }x {delta_i.shape}')
+                temp = temp @ delta_i
 
         return temp
 

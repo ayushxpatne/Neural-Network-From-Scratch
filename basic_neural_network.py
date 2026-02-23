@@ -1,6 +1,6 @@
 import numpy as np
 from activation_functions import ActivationFunction
-from back_propogation_helpers import NeuralNetworkHelpers
+from neural_network_helpers import NeuralNetworkHelpers
 from loss_functions import BinaryCrossEntropy
 from nn_utility import NeuralNetworkUtility
 
@@ -238,8 +238,8 @@ if __name__ == "__main__":
         x_arr=xor_input,
         y_arr=xor_output,
         learning_rate=0.1,
-        neurons_per_layer=10,
-        hidden_layers=5,
+        neurons_per_layer=2,
+        hidden_layers=1,
         epochs=1000,
     )
     print(
