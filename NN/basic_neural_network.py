@@ -4,14 +4,6 @@ from .neural_network_helpers import NeuralNetworkHelpers
 from .loss_functions import BinaryCrossEntropy
 from .nn_utility import NeuralNetworkUtility
 
-xor_input = [[0, 1], [0, 0], [1, 0], [1, 1]]
-xor_output = [1, 0, 1, 0]
-
-from sklearn.datasets import load_breast_cancer
-
-data = load_breast_cancer()
-x, y = data.data, data.target
-
 
 class NeuralNetwork:
     def __init__(
@@ -239,40 +231,4 @@ class NeuralNetwork:
                 self.hidden_layer_biases[i] -= b * self.learning_rate
 
 
-if __name__ == "__main__":
-    NN = NeuralNetwork(
-        x_arr=x,
-        y_arr=y,
-        learning_rate=0.1,
-        neurons_per_layer=2,
-        hidden_layers=1,
-        epochs=1000,
-    )
-    print(
-        f"\nNeural Network Details:\nNeurons Per Hidden Layer: {NN.neurons_per_layer}\nNo. Of Hidden Layers = {NN.hidden_layers}"
-    )
 
-    print("\n--- Pre Train ---")
-    # NN.utility.get_weight_logs(NN)
-
-    print("\n--- Pre Train Test ---")
-    for x, y in zip(xor_input, xor_output):
-        pred = NN.test(x)
-        print(f"Input: {x}, Expected: {y}, Got: {round(float(pred[0][0]), 8)}")
-
-    print(
-        f"\n--- Start Train for {NN.epochs} epochs at learning rate {NN.learning_rate}---"
-    )
-    # NN.utility.get_weight_shape_logs(NN)
-    NN.train()
-
-    print("\n--- Post Train ---")
-    # NN.utility.get_weight_logs(NN)
-    # NN.utility.get_activation_logs(NN)
-    NN.utility.get_weight_shape_logs(NN)
-    # NN.utility.get_gradient_logs(NN)
-
-    print("\n--- Test ---")
-    for x, y in zip(xor_input, xor_output):
-        pred = NN.test(x)
-        print(f"Input: {x}, Expected: {y}, Got: {round(float(pred[0][0]), 8)}")
