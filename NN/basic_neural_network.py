@@ -14,8 +14,8 @@ class NeuralNetwork:
         learning_rate=0.1,
         neurons_per_layer=2,
         hidden_layers=2,  # k
-        layer_activation=ActivationFunction.type.RELU,
-        output_activation=ActivationFunction.type.SIGMOID,
+        layer_activation=ActivationFunction.type.RELU.value,
+        output_activation=ActivationFunction.type.SIGMOID.value,
     ) -> None:
         self.layer_activation = layer_activation
         self.output_activation = output_activation

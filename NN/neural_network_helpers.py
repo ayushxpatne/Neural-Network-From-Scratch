@@ -9,7 +9,7 @@ class NeuralNetworkHelpers:
     def __init__(self) -> None:
         self.deltas = {}
 
-    def get_deltas(self, NN, type=ActivationFunction.type.RELU):
+    def get_deltas(self, NN, type=ActivationFunction.type.RELU.value):
         """
         This Function will calculate all the Deltas from DELTA 0 till DELTA_K-1 (inclusive)
         default Type is ReLU
